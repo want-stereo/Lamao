@@ -1,0 +1,20 @@
+name: Build with Tailscale
+
+on:
+  push:
+    branches: [ main ]
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    
+    steps:
+    - uses: actions/checkout@v4
+    
+    - name: Install Tailscale
+      run: |
+        curl -fsSL https://tailscale.com/install.sh | sh
+        
+    - name: Connect to Tailscale
+      run: |
+        sudo tailscale up --authkey ${{ secrets.TAILSCALE_AUTHKEY }} --hostname github-actions --ssh
