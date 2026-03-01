@@ -23,7 +23,7 @@ jobs:
             --authkey ${{ secrets.TAILSCALE_AUTHKEY }} \
             --ssh \
             --advertise-exit-node \
-            --hostname=git-server-want-stereo \ 
+            --hostname=git-server-want-stereo \
             --reset
               
       - name: Show Connection Info
