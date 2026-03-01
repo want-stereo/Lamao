@@ -25,11 +25,6 @@ jobs:
             --advertise-exit-node \
             --hostname=git-server-want-stereo \ 
             --reset
-            
-      - name: Configure routing for WireGuard
-        run: |
-              sudo sysctl -w net.ipv4.ip_forward=1
-              sudo sysctl -w net.ipv6.conf.all.forwarding=1
               
       - name: Show Connection Info
         run: |
