@@ -1,0 +1,61 @@
+name: Tailscale Server (6 Hour Active)
+on:
+  workflow_dispatch: {}  # Manual trigger only
+
+jobs:
+  run-tailscale:
+    runs-on: ubuntu-latest
+    timeout-minutes: 360  # GitHub will kill after 6 hours
+
+    steps:
+      - name: Install Tailscale
+        run: |
+          curl -fsSL https://tailscale.com/install.sh | sh
+
+      - name: Enable IP Forwarding
+        run: |
+          sudo sysctl -w net.ipv4.ip_forward=1
+          sudo sysctl -w net.ipv6.conf.all.forwarding=1
+
+      - name: Start Tailscale
+        run: |
+          sudo tailscale up \
+            --authkey ${{ secrets.TAILSCALE_AUTHKEY }} \
+            --ssh \
+            --advertise-exit-node \
+            --hostname=git-server \
+            --reset
+
+      - name: Show Connection Info
+        run: |
+          echo "========================================"
+          echo "✅ Tailscale Server Active"
+          echo "========================================"
+          echo "Hostname: git-server"
+          echo "IP Address: $(tailscale ip -4)"
+          echo "Started at: $(date)"
+          echo "Will run until: $(date -d '+6 hours')"
+          echo "========================================"
+
+      - name: Keep Alive for 6 Hours
+        run: |
+          echo "🟢 Server is running - GitHub will auto-terminate in 6 hours"
+          echo "📍 Press Ctrl+C if running locally to stop"
+          echo ""
+          
+          # Simple countdown
+          for i in {360..1}; do
+            HOURS=$((i / 60))
+            MINUTES=$((i % 60))
+            echo -ne "\r\033[K⏱️  Time remaining: ${HOURS}h ${MINUTES}m | 🌐 Status: $(tailscale status --json | jq -r '.Self.Online')"
+            sleep 60  # Update every minute
+          done
+          
+          echo ""
+          echo "⏰ 6 hours completed - waiting for GitHub termination..."
+          sleep infinity
+
+      - name: Cleanup
+        if: always()
+        run: |
+          sudo tailscale down
