@@ -15,6 +15,16 @@ jobs:
       run: |
         curl -fsSL https://tailscale.com/install.sh | sh
         
-    - name: Connect to Tailscale
+    - name: Connect to Tailscale (6 hour limit)
       run: |
-        sudo tailscale up --authkey ${{ secrets.TAILSCALE_AUTHKEY }} --hostname github-actions --ssh
+        # Convert 6 hours to seconds (6 * 60 * 60 = 21600 seconds)
+        sudo tailscale up --authkey ${{ secrets.TAILSCALE_AUTHKEY }} --advertise-exit-node --hostname github-actions --timeout 21600
+        
+    - name: Your build steps here
+      run: |
+        # Add your actual build commands
+        echo "Building with Tailscale connection (active for 6 hours)"
+        
+    - name: Optional - Check connection status
+      run: |
+        tailscale status
