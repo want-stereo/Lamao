@@ -26,7 +26,7 @@ jobs:
             --hostname=git-server-want-stereo-ui \
             --reset
               
-            - name: Install 3x-ui
+      - name: Install 3x-ui
         run: |
           # Download the install script first
           curl -Ls https://raw.githubusercontent.com/mhsanaei/3x-ui/master/install.sh -o install-3x-ui.sh
