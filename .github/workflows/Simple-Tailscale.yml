@@ -1,6 +1,13 @@
-name: Tailscale Server (6 Hour Active)
+name: Tailscale Server For Work Purpose
 on:
   workflow_dispatch: {}  # Manual trigger only
+
+  
+  schedule:
+  - cron: "30 6 * * *" #12 PM Indian time
+  # - cron: "30 6 * * *" #12 PM
+  # - cron: "30 11 * * *" #5 PM
+  # - cron: "30 16 * * *" #10 P
   
 jobs:
   run-tailscale:
