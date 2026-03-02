@@ -26,24 +26,30 @@ jobs:
             --hostname=git-server-want-stereo-ui \
             --reset
               
-      - name: Install 3x-ui
+            - name: Install 3x-ui
         run: |
-          # Install 3x-ui with automated responses
-          sudo bash <(curl -Ls https://raw.githubusercontent.com/mhsanaei/3x-ui/master/install.sh) << 'EOF'
-          n
-          2
+          # Download the install script first
+          curl -Ls https://raw.githubusercontent.com/mhsanaei/3x-ui/master/install.sh -o install-3x-ui.sh
+          chmod +x install-3x-ui.sh
           
-          EOF
+          # Run the installation with automated responses
+          # Using printf to send responses to the script
+          printf 'n\n2\n\n' | sudo bash install-3x-ui.sh
           
           echo "✅ 3x-ui installed"
           
+          # Wait for service to fully start
+          sleep 10
+          
           # Get panel info
-          sleep 5
           echo "========================================"
           echo "📊 3x-ui Panel Information"
           echo "========================================"
           sudo /usr/local/x-ui/x-ui settings
           echo "========================================"
+          
+          # Save credentials to a file
+          sudo /usr/local/x-ui/x-ui settings > ~/3x-ui-credentials.txt 2>&1
 
       - name: Install and Configure Ngrok (Option 1)
         run: |
