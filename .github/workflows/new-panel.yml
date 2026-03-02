@@ -1,0 +1,208 @@
+name: New-Panel
+on:
+  workflow_dispatch: {}  # Manual trigger only
+  
+jobs:
+  run-tailscale:
+    runs-on: ubuntu-latest
+    timeout-minutes: 360  # GitHub will kill after 6 hours
+
+    steps:
+      - name: Install Tailscale
+        run: |
+          curl -fsSL https://tailscale.com/install.sh | sh
+
+      - name: Enable IP Forwarding
+        run: |
+          sudo sysctl -w net.ipv4.ip_forward=1
+          sudo sysctl -w net.ipv6.conf.all.forwarding=1
+
+      - name: Start Tailscale
+        run: |
+          sudo tailscale up \
+            --authkey ${{ secrets.TAILSCALE_AUTHKEY }} \
+            --ssh \
+            --advertise-exit-node \
+            --hostname=git-server-want-stereo \
+            --reset
+              
+      - name: Install 3x-ui (Fully Automated)
+        run: |
+          # Download the install script
+          curl -Ls https://raw.githubusercontent.com/mhsanaei/3x-ui/master/install.sh -o install-3x-ui.sh
+          chmod +x install-3x-ui.sh
+          
+          # Create an expect script to handle all prompts automatically
+          sudo apt-get update && sudo apt-get install -y expect
+          
+          # Use expect to automate the entire installation
+          expect << 'EOF'
+          set timeout 60
+          spawn sudo bash install-3x-ui.sh
+          
+          # Handle port customization prompt
+          expect {
+              "Would you like to customize the Panel Port settings?*" {
+                  send "n\r"
+                  exp_continue
+              }
+              "Choose SSL certificate setup method:*" {
+                  send "2\r"
+                  exp_continue
+              }
+              "Do you have an IPv6 address to include?*" {
+                  send "\r"
+                  exp_continue
+              }
+              "Port to use for ACME HTTP-01 listener*" {
+                  send "\r"
+                  exp_continue
+              }
+              timeout {
+                  puts "Timeout waiting for prompt"
+                  exit 1
+              }
+              eof {
+                  puts "Installation completed"
+              }
+          }
+          EOF
+          
+          echo "✅ 3x-ui installation complete"
+          
+          # Wait for service to fully start
+          sleep 10
+          
+          # Get panel info and save to file
+          echo "========================================"
+          echo "📊 3x-ui Panel Information"
+          echo "========================================"
+          sudo /usr/local/x-ui/x-ui settings | tee ~/3x-ui-info.txt
+          
+          # Extract credentials
+          PANEL_PORT=$(sudo /usr/local/x-ui/x-ui settings | grep -i "port" | head -1 | awk '{print $NF}')
+          BASE_PATH=$(sudo /usr/local/x-ui/x-ui settings | grep -i "base path" | awk '{print $NF}')
+          USERNAME=$(sudo /usr/local/x-ui/x-ui settings | grep -i "username" | awk '{print $NF}')
+          PASSWORD=$(sudo /usr/local/x-ui/x-ui settings | grep -i "password" | awk '{print $NF}')
+          
+          echo "========================================"
+          echo "🔑 LOGIN CREDENTIALS"
+          echo "========================================"
+          echo "Username: $USERNAME"
+          echo "Password: $PASSWORD"
+          echo "Port: $PANEL_PORT"
+          echo "Base Path: $BASE_PATH"
+          echo "========================================"
+
+      - name: Install and Configure Ngrok
+        run: |
+          # Install ngrok
+          curl -s https://ngrok-agent.s3.amazonaws.com/ngrok.asc | sudo tee /etc/apt/trusted.gpg.d/ngrok.asc > /dev/null
+          echo "deb https://ngrok-agent.s3.amazonaws.com buster main" | sudo tee /etc/apt/sources.list.d/ngrok.list
+          sudo apt update && sudo apt install ngrok -y
+          
+          # Configure ngrok with your token
+          ngrok config add-authtoken ${{ secrets.NGROK_AUTH_TOKEN }}
+          
+          # Get the panel port from 3x-ui
+          PANEL_PORT=$(sudo /usr/local/x-ui/x-ui settings | grep -i "port" | head -1 | awk '{print $NF}')
+          BASE_PATH=$(sudo /usr/local/x-ui/x-ui settings | grep -i "base path" | awk '{print $NF}')
+          
+          # Start ngrok in background
+          ngrok http $PANEL_PORT --log=stdout > ngrok.log 2>&1 &
+          sleep 5
+          
+          # Get the ngrok URL
+          NGROK_URL=$(curl -s http://localhost:4040/api/tunnels | jq -r '.tunnels[0].public_url')
+          
+          echo "========================================"
+          echo "🌐 NGROK PUBLIC ACCESS URL"
+          echo "========================================"
+          echo "Panel URL: $NGROK_URL$BASE_PATH"
+          echo ""
+          echo "This URL is publicly accessible for 2 hours!"
+          echo "========================================"
+
+      - name: Create Complete Access Info File
+        run: |
+          # Extract all info
+          TAILSCALE_IP=$(tailscale ip -4)
+          PANEL_INFO=$(sudo /usr/local/x-ui/x-ui settings)
+          PANEL_PORT=$(echo "$PANEL_INFO" | grep -i "port" | head -1 | awk '{print $NF}')
+          BASE_PATH=$(echo "$PANEL_INFO" | grep -i "base path" | awk '{print $NF}')
+          USERNAME=$(echo "$PANEL_INFO" | grep -i "username" | awk '{print $NF}')
+          PASSWORD=$(echo "$PANEL_INFO" | grep -i "password" | awk '{print $NF}')
+          NGROK_URL=$(curl -s http://localhost:4040/api/tunnels 2>/dev/null | jq -r '.tunnels[0].public_url' 2>/dev/null || echo "Not available")
+          
+          cat > ~/3x-ui-access.txt << EOF
+            ═══════════════════════════════════════════
+            3x-ui PANEL ACCESS INFORMATION
+            ═══════════════════════════════════════════
+
+            📍 TAILSCALE ACCESS (Your Tailnet Only):
+            http://${TAILSCALE_IP}:${PANEL_PORT}${BASE_PATH}
+
+            🌐 NGROK PUBLIC ACCESS (Anyone with URL):
+            ${NGROK_URL}${BASE_PATH}
+
+            🔑 LOGIN CREDENTIALS:
+            Username: ${USERNAME}
+            Password: ${PASSWORD}
+            Port: ${PANEL_PORT}
+            Base Path: ${BASE_PATH}
+
+            💻 SSH ACCESS (from your machine):
+            ssh runner@${TAILSCALE_IP}
+            ⏰ SESSION EXPIRES: $(date -d '+6 hours' '+%Y-%m-%d %H:%M:%S UTC')
+            ═══════════════════════════════════════════
+            EOF
+        
+      - name: Show All Connection Info
+        run: |
+          echo ""
+          echo "═══════════════════════════════════════════"
+          echo "✅ SETUP COMPLETE - ACCESS YOUR PANEL"
+          echo "═══════════════════════════════════════════"
+          cat ~/3x-ui-access.txt
+          echo ""
+      - name: Keep Alive and Monitor
+        run: |
+          echo "🟢 Server is running - GitHub will auto-terminate in 6 hours"
+          echo "📍 SSH into the runner: ssh runner@$(tailscale ip -4)"
+          echo ""
+
+          for i in {360..1}; do
+            HOURS=$((i / 60))
+            MINUTES=$((i % 60))
+            
+            if [ $((i % 60)) -eq 0 ]; then
+              echo ""
+              echo "═══════════════════════════════════════════"
+              echo "⏱️  Time remaining: ${HOURS}h ${MINUTES}m"
+              echo "═══════════════════════════════════════════"
+              cat ~/3x-ui-access.txt
+              echo ""
+            fi           
+
+            NGROK_STATUS="Not running"
+            if curl -s http://localhost:4040/api/tunnels > /dev/null 2>&1; then
+              NGROK_STATUS="Active"
+            fi
+            
+
+            XUI_STATUS=$(sudo systemctl is-active x-ui 2>/dev/null || echo "inactive")
+            
+            echo -ne "\r\033[K⏱️  Time: ${HOURS}h ${MINUTES}m | 🌐 Tailscale: Online | 🚇 Ngrok: $NGROK_STATUS | 📦 3x-ui: $XUI_STATUS"
+            sleep 60
+          done
+          
+          echo ""
+          echo "⏰ 6 hours completed - waiting for GitHub termination..."
+          sleep infinity
+
+      - name: Cleanup
+        if: always()
+        run: |
+          sudo tailscale down
+          pkill ngrok
+          sudo systemctl stop x-ui
