@@ -1,15 +1,7 @@
 name: Tailscale Server (6 Hour Active)
 on:
   workflow_dispatch: {}  # Manual trigger only
-
-jobs:
-  build:
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v3
-      - name: Run something
-        run: echo "Hello World"
-
+  
 jobs:
   run-tailscale:
     runs-on: ubuntu-latest
