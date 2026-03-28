@@ -38,13 +38,6 @@ jobs:
         env:
           TS_SOCKET: /tmp/tailscaled.sock
 
-
-      - name: Auto-Approve Exit Node via API
-        run: |
-          NODE_ID=$(sudo tailscale status --json | jq -r '.Self.ID')
-          curl -X POST "https://api.tailscale.com/api/v2/node/$NODE_ID/attributes" \
-          -u "${{ secrets.TS_API_KEY }}:" \
-          --data-binary '{"attr":"exit-node", "value": true}'
           
       - name: Save Start Time
         run: |
