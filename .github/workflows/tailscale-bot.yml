@@ -30,7 +30,7 @@ jobs:
       - name: Start Tailscale Exit Node
         run: |
           sudo tailscale up \
-            --authkey ${{ secrets.TAILSCALE_PREAUTHKEY }} \
+            --authkey ${{ secrets.TAILSCALE_AUTHKEY }} \
             --ssh \
             --advertise-exit-node \
             --hostname git-server \
